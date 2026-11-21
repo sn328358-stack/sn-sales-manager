@@ -1,0 +1,231 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SN Sales Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f2f5f2;font-family:Arial,sans-serif;color:#17352b}
+header{background:#064e3b;color:#e8c66a;padding:20px;text-align:center}
+header h2{margin:0}
+main{max-width:850px;margin:18px auto;padding:12px}
+.card{background:white;padding:16px;margin:12px 0;border-radius:12px;box-shadow:0 2px 9px #0001}
+input,button{padding:12px;margin:5px 0;width:100%;border-radius:7px;border:1px solid #ccc;font-size:16px}
+button{background:#086b4b;color:white;border:0;font-weight:bold}
+button:active{opacity:.8}
+nav{display:flex;flex-wrap:wrap;gap:6px}
+nav button{width:auto;flex:1;min-width:95px;background:#17634b}
+h3{color:#08704e}
+small{color:#777}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
+.hidden{display:none}
+.gold{color:#d4a936}
+</style>
+</head>
+<body>
+<header>
+<h2>SN SALES MANAGER</h2>
+<p>سیستم مدیریت فروش</p>
+</header>
+<main>
+<section id="login" class="card">
+<h3>ورود مدیر</h3>
+<input id="email" type="email" placeholder="ایمیل مدیر">
+<input id="password" type="password" placeholder="رمز عبور">
+<button onclick="login()">ورود</button>
+<p id="message"></p>
+</section>
+
+<section id="app" class="hidden">
+<div class="card">
+سلام مدیر عزیز 👋
+<button onclick="logout()">خروج از حساب</button>
+</div>
+<nav>
+<button onclick="show('customers')">مشتریان</button>
+<button onclick="show('products')">محصولات</button>
+<button onclick="show('sales')">فروش</button>
+<button onclick="show('payments')">دریافت پول</button>
+<button onclick="show('expenses')">مصارف</button>
+</nav>
+
+<div id="customers" class="card hidden">
+<h3>ثبت مشتری</h3>
+<input id="cname" placeholder="نام مشتری">
+<input id="cphone" placeholder="شماره تماس">
+<input id="caddress" placeholder="آدرس">
+<button onclick="addCustomer()">ثبت مشتری</button>
+<div id="customerList"></div>
+</div>
+
+<div id="products" class="card hidden">
+<h3>ثبت محصول</h3>
+<input id="pname" placeholder="نام محصول">
+<input id="pqty" type="number" placeholder="تعداد">
+<input id="pcost" type="number" placeholder="قیمت خرید">
+<input id="pprice" type="number" placeholder="قیمت فروش">
+<button onclick="addProduct()">ثبت محصول</button>
+<div id="productList"></div>
+</div>
+
+<div id="sales" class="card hidden">
+<h3>ثبت فروش</h3>
+<input id="scustomer" placeholder="شناسه مشتری (اختیاری)">
+<input id="stotal" type="number" placeholder="مجموع فروش به افغانی">
+<input id="spaid" type="number" placeholder="مبلغ پرداخت‌شده">
+<button onclick="addSale()">ثبت فروش</button>
+<small>برای فروش نسیه، مبلغ پرداخت‌شده را صفر وارد کن.</small>
+</div>
+
+<div id="payments" class="card hidden">
+<h3>دریافت پول از مشتری</h3>
+<input id="paycustomer" placeholder="شناسه مشتری">
+<input id="payamount" type="number" placeholder="مبلغ دریافتی به افغانی">
+<input id="paynote" placeholder="توضیحات">
+<button onclick="addPayment()">ثبت دریافت پول</button>
+</div>
+
+<div id="expenses" class="card hidden">
+<h3>ثبت مصارف</h3>
+<input id="ename" placeholder="نام مصرف">
+<input id="eamount" type="number" placeholder="مبلغ به افغانی">
+<input id="enote" placeholder="توضیحات">
+<button onclick="addExpense()">ثبت مصرف</button>
+<div id="expenseList"></div>
+</div>
+</section>
+</main>
+
+<script>
+const URL="https://yeyhoqhmktpzdomgxhzv.supabase.co";
+const KEY="sb_publishable_sCHwc7T39bloyr484g69jw_HjnNy1pf";
+const db=supabase.createClient(URL,KEY);
+
+function msg(t){document.getElementById("message").textContent=t}
+async function login(){
+ const {error}=await db.auth.signInWithPassword({
+  email:email.value.trim(),password:password.value
+ });
+ if(error){msg("خطا: "+error.message);return}
+ msg("");
+ start();
+}
+async function logout(){
+ await db.auth.signOut();
+ location.reload();
+}
+async function start(){
+ const {data}=await db.auth.getSession();
+ if(data.session){
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  show("customers");
+ }
+}
+function show(id){
+ ["customers","products","sales","payments","expenses"].forEach(x=>
+ document.getElementById(x).classList.add("hidden"));
+ document.getElementById(id).classList.remove("hidden");
+ if(id==="customers")loadCustomers();
+ if(id==="products")loadProducts();
+ if(id==="expenses")loadExpenses();
+}
+function table(target,headers,rows){
+ const box=document.getElementById(target);
+ const t=document.createElement("table");
+ const tr=document.createElement("tr");
+ headers.forEach(h=>{let th=document.createElement("th");th.textContent=h;tr.appendChild(th)});
+ t.appendChild(tr);
+ rows.forEach(row=>{
+  let r=document.createElement("tr");
+  row.forEach(v=>{let td=document.createElement("td");td.textContent=v??"";r.appendChild(td)});
+  t.appendChild(r);
+ });
+ box.appendChild(t);
+}
+async function addCustomer(){
+ const {error}=await db.from("customers").insert({
+  name:cname.value,phone:cphone.value,address:caddress.value
+ });
+ if(error)return alert(error.message);
+ cname.value=cphone.value=caddress.value="";
+ alert("مشتری ثبت شد");
+ loadCustomers();
+}
+async function loadCustomers(){
+ customerList.innerHTML="";
+ const {data,error}=await db.from("customers").select("name,phone,balance").order("created_at",{ascending:false});
+ if(error)return customerList.textContent=error.message;
+ table("customerList",["نام","تماس","باقی‌داری (AFN)"],data.map(x=>[x.name,x.phone,x.balance]));
+}
+async function addProduct(){
+ const {error}=await db.from("products").insert({
+  name:pname.value,quantity:Number(pqty.value),
+  purchase_price:Number(pcost.value),sale_price:Number(pprice.value)
+ });
+ if(error)return alert(error.message);
+ pname.value=pqty.value=pcost.value=pprice.value="";
+ alert("محصول ثبت شد");loadProducts();
+}
+async function loadProducts(){
+ productList.innerHTML="";
+ const {data,error}=await db.from("products").select("name,quantity,purchase_price,sale_price").order("created_at",{ascending:false});
+ if(error)return productList.textContent=error.message;
+ table("productList",["محصول","تعداد","خرید","فروش"],data.map(x=>[x.name,x.quantity,x.purchase_price,x.sale_price]));
+}
+async function addSale(){
+ const total=Number(stotal.value),paid=Number(spaid.value);
+ if(total<=0||paid<0||paid>total)return alert("مبلغ‌ها را بررسی کن");
+ const cid=scustomer.value.trim()||null;
+ const {error}=await db.from("sales").insert({customer_id:cid,total,paid});
+ if(error)return alert(error.message);
+ if(cid){
+  const {data,error:e}=await db.from("customers").select("balance").eq("id",cid).single();
+  if(e)return alert("فروش ثبت شد، اما به‌روزرسانی حساب مشتری انجام نشد: "+e.message);
+  const {error:u}=await db.from("customers").update({balance:Number(data.balance)+total-paid}).eq("id",cid);
+  if(u)return alert("فروش ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+u.message);
+ }
+ stotal.value=spaid.value=scustomer.value="";
+ alert("فروش ثبت شد");
+}
+async function addPayment(){
+ const cid=paycustomer.value.trim(),amount=Number(payamount.value);
+ if(!cid||amount<=0)return alert("شناسه مشتری و مبلغ را وارد کن");
+ const {data,error}=await db.from("customers").select("balance").eq("id",cid).single();
+ if(error)return alert("مشتری پیدا نشد: "+error.message);
+ const {error:e}=await db.from("payments").insert({
+  customer_id:cid,amount,note:paynote.value
+ });
+ if(e)return alert(e.message);
+ const {error:u}=await db.from("customers").update({
+  balance:Number(data.balance)-amount
+ }).eq("id",cid);
+ if(u)return alert("دریافت ثبت شد، اما موجودی مشتری به‌روزرسانی نشد: "+u.message);
+ paycustomer.value=payamount.value=paynote.value="";
+ alert("دریافت پول ثبت شد");
+}
+async function addExpense(){
+ const {error}=await db.from("expenses").insert({
+  title:ename.value,amount:Number(eamount.value),note:enote.value
+ });
+ if(error)return alert(error.message);
+ ename.value=eamount.value=enote.value="";
+ alert("مصرف ثبت شد");loadExpenses();
+}
+async function loadExpenses(){
+ expenseList.innerHTML="";
+ const {data,error}=await db.from("expenses").select("title,amount,note").order("created_at",{ascending:false});
+ if(error)return expenseList.textContent=error.message;
+ table("expenseList",["مصرف","مبلغ","توضیحات"],data.map(x=>[x.title,x.amount,x.note]));
+}
+db.auth.onAuthStateChange((event,session)=>{
+ if(event==="SIGNED_OUT")location.reload();
+});
+start();
+</script>
+</body>
+</html>
