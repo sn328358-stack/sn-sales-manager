@@ -12,7 +12,7 @@ header{background:#064e3b;color:#e8c66a;padding:20px;text-align:center}
 header h2{margin:0}
 main{max-width:850px;margin:18px auto;padding:12px}
 .card{background:white;padding:16px;margin:12px 0;border-radius:12px;box-shadow:0 2px 9px #0001}
-input,button{padding:12px;margin:5px 0;width:100%;border-radius:7px;border:1px solid #ccc;font-size:16px}
+input,button,select{padding:12px;margin:5px 0;width:100%;border-radius:7px;border:1px solid #ccc;font-size:16px}
 button{background:#086b4b;color:white;border:0;font-weight:bold;cursor:pointer}
 nav{display:flex;flex-wrap:wrap;gap:6px}
 nav button{width:auto;flex:1;min-width:95px;background:#17634b}
@@ -52,6 +52,7 @@ td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
 <button onclick="show('sales')">فروش</button>
 <button onclick="show('payments')">دریافت پول</button>
 <button onclick="show('expenses')">مصارف</button>
+<button onclick="show('employees')">کارمندان</button>
 </nav>
 
 <div id="customers" class="card hidden">
@@ -98,6 +99,45 @@ td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
 <button onclick="addExpense()">ثبت مصرف</button>
 <div id="expenseList"></div>
 </div>
+
+<!-- بخش کارمندان -->
+<div id="employees" class="card hidden">
+
+<h3>ثبت کارمند جدید</h3>
+<input id="empname" placeholder="نام کارمند">
+<input id="empphone" placeholder="شماره تماس">
+<input id="empsalary" type="number" min="0" placeholder="معاش ماهانه به افغانی">
+<button onclick="addEmployee()">ثبت کارمند</button>
+
+<hr>
+<h3>ثبت برداشت یا پرداخت معاش</h3>
+
+<select id="transactionEmployee">
+<option value="">انتخاب کارمند</option>
+</select>
+
+<select id="transactionType">
+<option value="withdrawal">برداشت پول توسط کارمند</option>
+<option value="salary_payment">پرداخت معاش کارمند</option>
+</select>
+
+<input id="transactionAmount" type="number" min="1" placeholder="مبلغ به افغانی">
+<input id="transactionDescription" placeholder="توضیحات (اختیاری)">
+
+<button onclick="addEmployeeTransaction()">ثبت برداشت / پرداخت</button>
+
+<small>مبالغ این قسمت برای ماه جاری محاسبه می‌شود.</small>
+
+<hr>
+<h3>گزارش معاش و برداشت کارمندان</h3>
+<div id="employeeList"></div>
+
+<hr>
+<h3>آخرین برداشت‌ها و پرداخت‌ها</h3>
+<div id="employeeTransactionList"></div>
+
+</div>
+
 </section>
 </main>
 
@@ -105,12 +145,8 @@ td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
 const SUPABASE_URL="https://yeyhoqhmktpzdomgxhzv.supabase.co";
 const SUPABASE_KEY="sb_publishable_sCHwc7T39bloyr484g69jw_HjnNy1pf";
 
-// ایجاد اتصال دیتابیس
 try {
- window.SN_DB = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
- );
+ window.SN_DB=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 } catch(e) {
  console.error(e);
 }
@@ -122,16 +158,14 @@ function getDB(){
  return window.SN_DB;
 }
 
-function el(id){
- return document.getElementById(id);
-}
+function el(id){return document.getElementById(id);}
+function val(id){return el(id).value.trim();}
+function msg(t){el("message").textContent=t;}
 
-function val(id){
- return el(id).value.trim();
-}
-
-function msg(t){
- el("message").textContent=t;
+// تاریخ اول ماه جاری
+function currentMonth(){
+ const d=new Date();
+ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01";
 }
 
 // ورود مدیر
@@ -147,53 +181,37 @@ async function login(){
 
   msg("در حال بررسی ورود...");
 
-  const {data,error}=await getDB().auth.signInWithPassword({
-   email:email,
-   password:password
+  const {error}=await getDB().auth.signInWithPassword({
+   email:email,password:password
   });
 
-  if(error){
-   msg("خطا: "+error.message);
-   return;
-  }
+  if(error){msg("خطا: "+error.message);return;}
 
   msg("ورود موفق بود");
   await start();
 
- }catch(e){
-  msg("خطا در اتصال: "+e.message);
- }
+ }catch(e){msg("خطا در اتصال: "+e.message);}
 }
 
 // خروج مدیر
 async function logout(){
  try{
   const {error}=await getDB().auth.signOut();
-
-  if(error){
-   alert(error.message);
-   return;
-  }
+  if(error){alert(error.message);return;}
 
   el("app").classList.add("hidden");
   el("login").classList.remove("hidden");
   el("password").value="";
   msg("از حساب خارج شدی");
 
- }catch(e){
-  alert(e.message);
- }
+ }catch(e){alert(e.message);}
 }
 
 // بررسی وضعیت ورود
 async function start(){
  try{
   const {data,error}=await getDB().auth.getSession();
-
-  if(error){
-   msg(error.message);
-   return;
-  }
+  if(error){msg(error.message);return;}
 
   if(data.session){
    el("login").classList.add("hidden");
@@ -204,14 +222,12 @@ async function start(){
    el("app").classList.add("hidden");
   }
 
- }catch(e){
-  msg("خطا: "+e.message);
- }
+ }catch(e){msg("خطا: "+e.message);}
 }
 
 // نمایش بخش‌ها
 function show(id){
- ["customers","products","sales","payments","expenses"].forEach(x=>{
+ ["customers","products","sales","payments","expenses","employees"].forEach(x=>{
   el(x).classList.add("hidden");
  });
 
@@ -220,6 +236,10 @@ function show(id){
  if(id==="customers")loadCustomers();
  if(id==="products")loadProducts();
  if(id==="expenses")loadExpenses();
+ if(id==="employees"){
+  loadEmployees();
+  loadEmployeeTransactions();
+ }
 }
 
 // ساخت جدول
@@ -233,18 +253,15 @@ function table(target,headers,rows){
   th.textContent=h;
   tr.appendChild(th);
  });
-
  t.appendChild(tr);
 
  rows.forEach(row=>{
   const r=document.createElement("tr");
-
   row.forEach(v=>{
    const td=document.createElement("td");
    td.textContent=v??"";
    r.appendChild(td);
   });
-
   t.appendChild(r);
  });
 
@@ -255,27 +272,17 @@ function table(target,headers,rows){
 async function addCustomer(){
  try{
   const name=val("cname");
-
-  if(!name){
-   alert("نام مشتری را وارد کن");
-   return;
-  }
+  if(!name){alert("نام مشتری را وارد کن");return;}
 
   const {error}=await getDB().from("customers").insert({
-   name:name,
-   phone:val("cphone"),
-   address:val("caddress")
+   name:name,phone:val("cphone"),address:val("caddress")
   });
 
-  if(error){
-   alert(error.message);
-   return;
-  }
+  if(error){alert(error.message);return;}
 
   el("cname").value="";
   el("cphone").value="";
   el("caddress").value="";
-
   alert("مشتری ثبت شد");
   loadCustomers();
 
@@ -286,24 +293,17 @@ async function addCustomer(){
 async function loadCustomers(){
  try{
   el("customerList").innerHTML="در حال بارگذاری...";
-
-  const {data,error}=await getDB()
-   .from("customers")
+  const {data,error}=await getDB().from("customers")
    .select("name,phone,balance")
    .order("created_at",{ascending:false});
 
-  if(error){
-   el("customerList").textContent=error.message;
-   return;
-  }
+  if(error){el("customerList").textContent=error.message;return;}
 
   el("customerList").innerHTML="";
   table("customerList",["نام","تماس","باقی‌داری (AFN)"],
    data.map(x=>[x.name,x.phone,x.balance]));
 
- }catch(e){
-  el("customerList").textContent=e.message;
- }
+ }catch(e){el("customerList").textContent=e.message;}
 }
 
 // ثبت محصول
@@ -315,15 +315,11 @@ async function addProduct(){
   const price=Number(val("pprice"));
 
   if(!name || qty<0 || cost<0 || price<0){
-   alert("اطلاعات محصول را بررسی کن");
-   return;
+   alert("اطلاعات محصول را بررسی کن");return;
   }
 
   const {error}=await getDB().from("products").insert({
-   name:name,
-   quantity:qty,
-   purchase_price:cost,
-   sale_price:price
+   name:name,quantity:qty,purchase_price:cost,sale_price:price
   });
 
   if(error){alert(error.message);return;}
@@ -332,7 +328,6 @@ async function addProduct(){
   el("pqty").value="";
   el("pcost").value="";
   el("pprice").value="";
-
   alert("محصول ثبت شد");
   loadProducts();
 
@@ -343,24 +338,17 @@ async function addProduct(){
 async function loadProducts(){
  try{
   el("productList").innerHTML="در حال بارگذاری...";
-
-  const {data,error}=await getDB()
-   .from("products")
+  const {data,error}=await getDB().from("products")
    .select("name,quantity,purchase_price,sale_price")
    .order("created_at",{ascending:false});
 
-  if(error){
-   el("productList").textContent=error.message;
-   return;
-  }
+  if(error){el("productList").textContent=error.message;return;}
 
   el("productList").innerHTML="";
   table("productList",["محصول","تعداد","خرید","فروش"],
    data.map(x=>[x.name,x.quantity,x.purchase_price,x.sale_price]));
 
- }catch(e){
-  el("productList").textContent=e.message;
- }
+ }catch(e){el("productList").textContent=e.message;}
 }
 
 // ثبت فروش
@@ -371,8 +359,7 @@ async function addSale(){
   const cid=val("scustomer")||null;
 
   if(total<=0 || paid<0 || paid>total){
-   alert("مبلغ فروش و پرداخت را بررسی کن");
-   return;
+   alert("مبلغ فروش و پرداخت را بررسی کن");return;
   }
 
   if(cid){
@@ -380,8 +367,7 @@ async function addSale(){
     .from("customers").select("id,balance").eq("id",cid).single();
 
    if(customerError){
-    alert("شناسه مشتری درست نیست: "+customerError.message);
-    return;
+    alert("شناسه مشتری درست نیست: "+customerError.message);return;
    }
 
    const {error}=await getDB().from("sales").insert({
@@ -390,10 +376,8 @@ async function addSale(){
 
    if(error){alert(error.message);return;}
 
-   const {error:updateError}=await getDB()
-    .from("customers")
-    .update({balance:Number(customer.balance||0)+total-paid})
-    .eq("id",cid);
+   const {error:updateError}=await getDB().from("customers")
+    .update({balance:Number(customer.balance||0)+total-paid}).eq("id",cid);
 
    if(updateError){
     alert("فروش ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);
@@ -404,7 +388,6 @@ async function addSale(){
    const {error}=await getDB().from("sales").insert({
     customer_id:null,total:total,paid:paid
    });
-
    if(error){alert(error.message);return;}
   }
 
@@ -424,36 +407,22 @@ async function addPayment(){
   const note=val("paynote");
 
   if(!cid || amount<=0){
-   alert("شناسه مشتری و مبلغ را وارد کن");
-   return;
+   alert("شناسه مشتری و مبلغ را وارد کن");return;
   }
 
-  const {data,error}=await getDB()
-   .from("customers")
-   .select("balance")
-   .eq("id",cid)
-   .single();
+  const {data,error}=await getDB().from("customers")
+   .select("balance").eq("id",cid).single();
 
-  if(error){
-   alert("مشتری پیدا نشد: "+error.message);
-   return;
-  }
+  if(error){alert("مشتری پیدا نشد: "+error.message);return;}
 
   const {error:paymentError}=await getDB().from("payments").insert({
-   customer_id:cid,
-   amount:amount,
-   note:note
+   customer_id:cid,amount:amount,note:note
   });
 
-  if(paymentError){
-   alert(paymentError.message);
-   return;
-  }
+  if(paymentError){alert(paymentError.message);return;}
 
-  const {error:updateError}=await getDB()
-   .from("customers")
-   .update({balance:Number(data.balance||0)-amount})
-   .eq("id",cid);
+  const {error:updateError}=await getDB().from("customers")
+   .update({balance:Number(data.balance||0)-amount}).eq("id",cid);
 
   if(updateError){
    alert("دریافت ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);
@@ -475,14 +444,11 @@ async function addExpense(){
   const amount=Number(val("eamount"));
 
   if(!title || amount<=0){
-   alert("نام مصرف و مبلغ را وارد کن");
-   return;
+   alert("نام مصرف و مبلغ را وارد کن");return;
   }
 
   const {error}=await getDB().from("expenses").insert({
-   title:title,
-   amount:amount,
-   note:val("enote")
+   title:title,amount:amount,note:val("enote")
   });
 
   if(error){alert(error.message);return;}
@@ -490,7 +456,6 @@ async function addExpense(){
   el("ename").value="";
   el("eamount").value="";
   el("enote").value="";
-
   alert("مصرف ثبت شد");
   loadExpenses();
 
@@ -501,23 +466,191 @@ async function addExpense(){
 async function loadExpenses(){
  try{
   el("expenseList").innerHTML="در حال بارگذاری...";
-
-  const {data,error}=await getDB()
-   .from("expenses")
+  const {data,error}=await getDB().from("expenses")
    .select("title,amount,note")
    .order("created_at",{ascending:false});
 
-  if(error){
-   el("expenseList").textContent=error.message;
-   return;
-  }
+  if(error){el("expenseList").textContent=error.message;return;}
 
   el("expenseList").innerHTML="";
   table("expenseList",["مصرف","مبلغ","توضیحات"],
    data.map(x=>[x.title,x.amount,x.note]));
 
+ }catch(e){el("expenseList").textContent=e.message;}
+}
+
+// ثبت کارمند
+async function addEmployee(){
+ try{
+  const name=val("empname");
+  const phone=val("empphone");
+  const salary=Number(val("empsalary"));
+
+  if(!name || salary<0 || val("empsalary")===""){
+   alert("نام و معاش ماهانه را درست وارد کن");return;
+  }
+
+  const {error}=await getDB().from("employees").insert({
+   name:name,
+   phone:phone,
+   monthly_salary:salary
+  });
+
+  if(error){alert(error.message);return;}
+
+  el("empname").value="";
+  el("empphone").value="";
+  el("empsalary").value="";
+
+  alert("کارمند ثبت شد");
+  loadEmployees();
+
+ }catch(e){alert(e.message);}
+}
+
+// نمایش کارمندان و محاسبه معاش باقی‌مانده ماه جاری
+async function loadEmployees(){
+ try{
+  el("employeeList").innerHTML="در حال بارگذاری...";
+
+  const {data:employees,error}=await getDB().from("employees")
+   .select("id,name,phone,monthly_salary")
+   .order("created_at",{ascending:false});
+
+  if(error){el("employeeList").textContent=error.message;return;}
+
+  const {data:transactions,error:transactionError}=await getDB()
+   .from("employee_transactions")
+   .select("employee_id,amount,transaction_type")
+   .eq("transaction_month",currentMonth());
+
+  if(transactionError){
+   el("employeeList").textContent=transactionError.message;return;
+  }
+
+  const select=el("transactionEmployee");
+  select.innerHTML='<option value="">انتخاب کارمند</option>';
+
+  employees.forEach(emp=>{
+   const option=document.createElement("option");
+   option.value=emp.id;
+   option.textContent=emp.name;
+   select.appendChild(option);
+  });
+
+  const rows=employees.map(emp=>{
+   const own=transactions.filter(t=>t.employee_id===emp.id);
+   const withdrawals=own
+    .filter(t=>t.transaction_type==="withdrawal")
+    .reduce((sum,t)=>sum+Number(t.amount),0);
+
+   const payments=own
+    .filter(t=>t.transaction_type==="salary_payment")
+    .reduce((sum,t)=>sum+Number(t.amount),0);
+
+   const salary=Number(emp.monthly_salary||0);
+   const remaining=salary-withdrawals-payments;
+
+   return [
+    emp.name,
+    emp.phone,
+    salary,
+    withdrawals,
+    payments,
+    remaining
+   ];
+  });
+
+  el("employeeList").innerHTML="";
+  if(rows.length===0){
+   el("employeeList").textContent="هنوز کارمندی ثبت نشده است.";
+  }else{
+   table("employeeList",
+    ["نام","تماس","معاش ماهانه","برداشت","پرداخت معاش","باقی‌مانده"],
+    rows);
+  }
+
  }catch(e){
-  el("expenseList").textContent=e.message;
+  el("employeeList").textContent=e.message;
+ }
+}
+
+// ثبت برداشت یا پرداخت معاش
+async function addEmployeeTransaction(){
+ try{
+  const employeeId=val("transactionEmployee");
+  const type=val("transactionType");
+  const amount=Number(val("transactionAmount"));
+  const description=val("transactionDescription");
+
+  if(!employeeId || amount<=0){
+   alert("کارمند و مبلغ را درست انتخاب و وارد کن");return;
+  }
+
+  const {error}=await getDB().from("employee_transactions").insert({
+   employee_id:employeeId,
+   amount:amount,
+   transaction_type:type,
+   transaction_month:currentMonth(),
+   description:description
+  });
+
+  if(error){alert(error.message);return;}
+
+  el("transactionAmount").value="";
+  el("transactionDescription").value="";
+
+  alert("تراکنش کارمند ثبت شد");
+  loadEmployees();
+  loadEmployeeTransactions();
+
+ }catch(e){alert(e.message);}
+}
+
+// نمایش آخرین برداشت‌ها و پرداخت‌ها
+async function loadEmployeeTransactions(){
+ try{
+  el("employeeTransactionList").innerHTML="در حال بارگذاری...";
+
+  const {data:transactions,error}=await getDB()
+   .from("employee_transactions")
+   .select("employee_id,amount,transaction_type,transaction_month,description,created_at")
+   .order("created_at",{ascending:false})
+   .limit(50);
+
+  if(error){
+   el("employeeTransactionList").textContent=error.message;return;
+  }
+
+  const {data:employees, error:employeeError}=await getDB()
+   .from("employees").select("id,name");
+
+  if(employeeError){
+   el("employeeTransactionList").textContent=employeeError.message;return;
+  }
+
+  const names={};
+  employees.forEach(emp=>{names[emp.id]=emp.name;});
+
+  const rows=transactions.map(t=>[
+   names[t.employee_id]||"کارمند",
+   t.transaction_type==="withdrawal"?"برداشت":"پرداخت معاش",
+   t.amount,
+   t.transaction_month,
+   t.description
+  ]);
+
+  el("employeeTransactionList").innerHTML="";
+  if(rows.length===0){
+   el("employeeTransactionList").textContent="هنوز برداشتی یا پرداختی ثبت نشده است.";
+  }else{
+   table("employeeTransactionList",
+    ["کارمند","نوع","مبلغ","ماه","توضیحات"],
+    rows);
+  }
+
+ }catch(e){
+  el("employeeTransactionList").textContent=e.message;
  }
 }
 
