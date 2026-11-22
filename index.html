@@ -5,78 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SN Sales Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <style>
 *{box-sizing:border-box}
-body{
- margin:0;
- background:#f2f5f2;
- font-family:Arial,sans-serif;
- color:#17352b
-}
-header{
- background:#064e3b;
- color:#e8c66a;
- padding:20px;
- text-align:center
-}
+body{margin:0;background:#f2f5f2;font-family:Arial,sans-serif;color:#17352b}
+header{background:#064e3b;color:#e8c66a;padding:20px;text-align:center}
 header h2{margin:0}
-main{
- max-width:850px;
- margin:18px auto;
- padding:12px
-}
-.card{
- background:white;
- padding:16px;
- margin:12px 0;
- border-radius:12px;
- box-shadow:0 2px 9px #0001
-}
-input,button{
- padding:12px;
- margin:5px 0;
- width:100%;
- border-radius:7px;
- border:1px solid #ccc;
- font-size:16px
-}
-button{
- background:#086b4b;
- color:white;
- border:0;
- font-weight:bold;
- cursor:pointer
-}
-button:active{opacity:.8}
-nav{
- display:flex;
- flex-wrap:wrap;
- gap:6px
-}
-nav button{
- width:auto;
- flex:1;
- min-width:95px;
- background:#17634b
-}
+main{max-width:850px;margin:18px auto;padding:12px}
+.card{background:white;padding:16px;margin:12px 0;border-radius:12px;box-shadow:0 2px 9px #0001}
+input,button{padding:12px;margin:5px 0;width:100%;border-radius:7px;border:1px solid #ccc;font-size:16px}
+button{background:#086b4b;color:white;border:0;font-weight:bold;cursor:pointer}
+nav{display:flex;flex-wrap:wrap;gap:6px}
+nav button{width:auto;flex:1;min-width:95px;background:#17634b}
 h3{color:#08704e}
 small{color:#777}
-table{
- width:100%;
- border-collapse:collapse;
- font-size:14px
-}
-td,th{
- padding:9px;
- border-bottom:1px solid #ddd;
- text-align:right
-}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
 .hidden{display:none}
-.gold{color:#d4a936}
 </style>
 </head>
-
 <body>
 
 <header>
@@ -95,7 +41,6 @@ td,th{
 </section>
 
 <section id="app" class="hidden">
-
 <div class="card">
 سلام مدیر عزیز 👋
 <button onclick="logout()">خروج از حساب</button>
@@ -153,16 +98,29 @@ td,th{
 <button onclick="addExpense()">ثبت مصرف</button>
 <div id="expenseList"></div>
 </div>
-
 </section>
 </main>
 
 <script>
-const URL="https://yeyhoqhmktpzdomgxhzv.supabase.co";
+const SUPABASE_URL="https://yeyhoqhmktpzdomgxhzv.supabase.co";
+const SUPABASE_KEY="sb_publishable_sCHwc7T39bloyr484g69jw_HjnNy1pf";
 
-const KEY="sb_publishable_sCHwc7T39bloyr484g69jw_HjnNy1pf";
+// ایجاد اتصال دیتابیس
+try {
+ window.SN_DB = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+ );
+} catch(e) {
+ console.error(e);
+}
 
-const db=supabase.createClient(URL,KEY);
+function getDB(){
+ if(!window.SN_DB){
+  throw new Error("اتصال دیتابیس آماده نیست. صفحه را دوباره باز کن.");
+ }
+ return window.SN_DB;
+}
 
 function el(id){
  return document.getElementById(id);
@@ -178,22 +136,20 @@ function msg(t){
 
 // ورود مدیر
 async function login(){
-
- const emailInput=val("email");
- const passwordInput=el("password").value;
-
- if(!emailInput || !passwordInput){
-  msg("لطفاً ایمیل و رمز عبور را وارد کن");
-  return;
- }
-
- msg("در حال بررسی ورود...");
-
  try{
+  const email=val("email");
+  const password=el("password").value;
 
-  const {data,error}=await db.auth.signInWithPassword({
-   email:emailInput,
-   password:passwordInput
+  if(!email || !password){
+   msg("ایمیل و رمز عبور را وارد کن");
+   return;
+  }
+
+  msg("در حال بررسی ورود...");
+
+  const {data,error}=await getDB().auth.signInWithPassword({
+   email:email,
+   password:password
   });
 
   if(error){
@@ -211,26 +167,28 @@ async function login(){
 
 // خروج مدیر
 async function logout(){
+ try{
+  const {error}=await getDB().auth.signOut();
 
- const {error}=await db.auth.signOut();
+  if(error){
+   alert(error.message);
+   return;
+  }
 
- if(error){
-  alert(error.message);
-  return;
+  el("app").classList.add("hidden");
+  el("login").classList.remove("hidden");
+  el("password").value="";
+  msg("از حساب خارج شدی");
+
+ }catch(e){
+  alert(e.message);
  }
-
- el("app").classList.add("hidden");
- el("login").classList.remove("hidden");
- el("password").value="";
- msg("از حساب خارج شدی");
 }
 
-// بررسی ورود
+// بررسی وضعیت ورود
 async function start(){
-
  try{
-
-  const {data,error}=await db.auth.getSession();
+  const {data,error}=await getDB().auth.getSession();
 
   if(error){
    msg(error.message);
@@ -238,17 +196,12 @@ async function start(){
   }
 
   if(data.session){
-
    el("login").classList.add("hidden");
    el("app").classList.remove("hidden");
-
    show("customers");
-
   }else{
-
    el("login").classList.remove("hidden");
    el("app").classList.add("hidden");
-
   }
 
  }catch(e){
@@ -258,7 +211,6 @@ async function start(){
 
 // نمایش بخش‌ها
 function show(id){
-
  ["customers","products","sales","payments","expenses"].forEach(x=>{
   el(x).classList.add("hidden");
  });
@@ -272,10 +224,8 @@ function show(id){
 
 // ساخت جدول
 function table(target,headers,rows){
-
  const box=el(target);
  const t=document.createElement("table");
-
  const tr=document.createElement("tr");
 
  headers.forEach(h=>{
@@ -287,7 +237,6 @@ function table(target,headers,rows){
  t.appendChild(tr);
 
  rows.forEach(row=>{
-
   const r=document.createElement("tr");
 
   row.forEach(v=>{
@@ -297,7 +246,6 @@ function table(target,headers,rows){
   });
 
   t.appendChild(r);
-
  });
 
  box.appendChild(t);
@@ -305,289 +253,278 @@ function table(target,headers,rows){
 
 // ثبت مشتری
 async function addCustomer(){
+ try{
+  const name=val("cname");
 
- const name=val("cname");
+  if(!name){
+   alert("نام مشتری را وارد کن");
+   return;
+  }
 
- if(!name){
-  alert("نام مشتری را وارد کن");
-  return;
- }
+  const {error}=await getDB().from("customers").insert({
+   name:name,
+   phone:val("cphone"),
+   address:val("caddress")
+  });
 
- const {error}=await db.from("customers").insert({
-  name:name,
-  phone:val("cphone"),
-  address:val("caddress")
- });
+  if(error){
+   alert(error.message);
+   return;
+  }
 
- if(error){
-  alert(error.message);
-  return;
- }
+  el("cname").value="";
+  el("cphone").value="";
+  el("caddress").value="";
 
- el("cname").value="";
- el("cphone").value="";
- el("caddress").value="";
+  alert("مشتری ثبت شد");
+  loadCustomers();
 
- alert("مشتری ثبت شد");
-
- loadCustomers();
+ }catch(e){alert(e.message);}
 }
 
 // نمایش مشتریان
 async function loadCustomers(){
+ try{
+  el("customerList").innerHTML="در حال بارگذاری...";
 
- el("customerList").innerHTML="در حال بارگذاری...";
+  const {data,error}=await getDB()
+   .from("customers")
+   .select("name,phone,balance")
+   .order("created_at",{ascending:false});
 
- const {data,error}=await db
- .from("customers")
- .select("name,phone,balance")
- .order("created_at",{ascending:false});
+  if(error){
+   el("customerList").textContent=error.message;
+   return;
+  }
 
- if(error){
-  el("customerList").textContent=error.message;
-  return;
+  el("customerList").innerHTML="";
+  table("customerList",["نام","تماس","باقی‌داری (AFN)"],
+   data.map(x=>[x.name,x.phone,x.balance]));
+
+ }catch(e){
+  el("customerList").textContent=e.message;
  }
-
- el("customerList").innerHTML="";
-
- table(
-  "customerList",
-  ["نام","تماس","باقی‌داری (AFN)"],
-  data.map(x=>[x.name,x.phone,x.balance])
- );
 }
 
 // ثبت محصول
 async function addProduct(){
+ try{
+  const name=val("pname");
+  const qty=Number(val("pqty"));
+  const cost=Number(val("pcost"));
+  const price=Number(val("pprice"));
 
- const name=val("pname");
- const qty=Number(val("pqty"));
- const cost=Number(val("pcost"));
- const price=Number(val("pprice"));
+  if(!name || qty<0 || cost<0 || price<0){
+   alert("اطلاعات محصول را بررسی کن");
+   return;
+  }
 
- if(!name || qty<0 || cost<0 || price<0){
-  alert("اطلاعات محصول را درست وارد کن");
-  return;
- }
+  const {error}=await getDB().from("products").insert({
+   name:name,
+   quantity:qty,
+   purchase_price:cost,
+   sale_price:price
+  });
 
- const {error}=await db.from("products").insert({
-  name:name,
-  quantity:qty,
-  purchase_price:cost,
-  sale_price:price
- });
+  if(error){alert(error.message);return;}
 
- if(error){
-  alert(error.message);
-  return;
- }
+  el("pname").value="";
+  el("pqty").value="";
+  el("pcost").value="";
+  el("pprice").value="";
 
- el("pname").value="";
- el("pqty").value="";
- el("pcost").value="";
- el("pprice").value="";
+  alert("محصول ثبت شد");
+  loadProducts();
 
- alert("محصول ثبت شد");
-
- loadProducts();
+ }catch(e){alert(e.message);}
 }
 
 // نمایش محصولات
 async function loadProducts(){
+ try{
+  el("productList").innerHTML="در حال بارگذاری...";
 
- el("productList").innerHTML="در حال بارگذاری...";
+  const {data,error}=await getDB()
+   .from("products")
+   .select("name,quantity,purchase_price,sale_price")
+   .order("created_at",{ascending:false});
 
- const {data,error}=await db
- .from("products")
- .select("name,quantity,purchase_price,sale_price")
- .order("created_at",{ascending:false});
+  if(error){
+   el("productList").textContent=error.message;
+   return;
+  }
 
- if(error){
-  el("productList").textContent=error.message;
-  return;
+  el("productList").innerHTML="";
+  table("productList",["محصول","تعداد","خرید","فروش"],
+   data.map(x=>[x.name,x.quantity,x.purchase_price,x.sale_price]));
+
+ }catch(e){
+  el("productList").textContent=e.message;
  }
-
- el("productList").innerHTML="";
-
- table(
-  "productList",
-  ["محصول","تعداد","خرید","فروش"],
-  data.map(x=>[
-   x.name,
-   x.quantity,
-   x.purchase_price,
-   x.sale_price
-  ])
- );
 }
 
 // ثبت فروش
 async function addSale(){
+ try{
+  const total=Number(val("stotal"));
+  const paid=Number(val("spaid"));
+  const cid=val("scustomer")||null;
 
- const total=Number(val("stotal"));
- const paid=Number(val("spaid"));
- const cid=val("scustomer")||null;
+  if(total<=0 || paid<0 || paid>total){
+   alert("مبلغ فروش و پرداخت را بررسی کن");
+   return;
+  }
 
- if(total<=0 || paid<0 || paid>total){
-  alert("مبلغ فروش و پرداخت را بررسی کن");
-  return;
- }
+  if(cid){
+   const {data:customer,error:customerError}=await getDB()
+    .from("customers").select("id,balance").eq("id",cid).single();
 
- const {error}=await db.from("sales").insert({
-  customer_id:cid,
-  total:total,
-  paid:paid
- });
+   if(customerError){
+    alert("شناسه مشتری درست نیست: "+customerError.message);
+    return;
+   }
 
- if(error){
-  alert(error.message);
-  return;
- }
+   const {error}=await getDB().from("sales").insert({
+    customer_id:cid,total:total,paid:paid
+   });
 
- if(cid){
+   if(error){alert(error.message);return;}
 
-  const {data,error:e}=await db
+   const {error:updateError}=await getDB()
+    .from("customers")
+    .update({balance:Number(customer.balance||0)+total-paid})
+    .eq("id",cid);
+
+   if(updateError){
+    alert("فروش ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);
+    return;
+   }
+
+  }else{
+   const {error}=await getDB().from("sales").insert({
+    customer_id:null,total:total,paid:paid
+   });
+
+   if(error){alert(error.message);return;}
+  }
+
+  el("stotal").value="";
+  el("spaid").value="";
+  el("scustomer").value="";
+  alert("فروش ثبت شد");
+
+ }catch(e){alert(e.message);}
+}
+
+// دریافت پول
+async function addPayment(){
+ try{
+  const cid=val("paycustomer");
+  const amount=Number(val("payamount"));
+  const note=val("paynote");
+
+  if(!cid || amount<=0){
+   alert("شناسه مشتری و مبلغ را وارد کن");
+   return;
+  }
+
+  const {data,error}=await getDB()
    .from("customers")
    .select("balance")
    .eq("id",cid)
    .single();
 
-  if(e){
-   alert("فروش ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+e.message);
+  if(error){
+   alert("مشتری پیدا نشد: "+error.message);
    return;
   }
 
-  const {error:u}=await db
+  const {error:paymentError}=await getDB().from("payments").insert({
+   customer_id:cid,
+   amount:amount,
+   note:note
+  });
+
+  if(paymentError){
+   alert(paymentError.message);
+   return;
+  }
+
+  const {error:updateError}=await getDB()
    .from("customers")
-   .update({
-    balance:Number(data.balance||0)+total-paid
-   })
+   .update({balance:Number(data.balance||0)-amount})
    .eq("id",cid);
 
-  if(u){
-   alert("فروش ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+u.message);
+  if(updateError){
+   alert("دریافت ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);
    return;
   }
- }
 
- el("stotal").value="";
- el("spaid").value="";
- el("scustomer").value="";
+  el("paycustomer").value="";
+  el("payamount").value="";
+  el("paynote").value="";
+  alert("دریافت پول ثبت شد");
 
- alert("فروش ثبت شد");
-}
-
-// دریافت پول مشتری
-async function addPayment(){
-
- const cid=val("paycustomer");
- const amount=Number(val("payamount"));
- const note=val("paynote");
-
- if(!cid || amount<=0){
-  alert("شناسه مشتری و مبلغ را وارد کن");
-  return;
- }
-
- const {data,error}=await db
-  .from("customers")
-  .select("balance")
-  .eq("id",cid)
-  .single();
-
- if(error){
-  alert("مشتری پیدا نشد: "+error.message);
-  return;
- }
-
- const {error:e}=await db.from("payments").insert({
-  customer_id:cid,
-  amount:amount,
-  note:note
- });
-
- if(e){
-  alert(e.message);
-  return;
- }
-
- const {error:u}=await db
-  .from("customers")
-  .update({
-   balance:Number(data.balance||0)-amount
-  })
-  .eq("id",cid);
-
- if(u){
-  alert("دریافت ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+u.message);
-  return;
- }
-
- el("paycustomer").value="";
- el("payamount").value="";
- el("paynote").value="";
-
- alert("دریافت پول ثبت شد");
+ }catch(e){alert(e.message);}
 }
 
 // ثبت مصارف
 async function addExpense(){
+ try{
+  const title=val("ename");
+  const amount=Number(val("eamount"));
 
- const title=val("ename");
- const amount=Number(val("eamount"));
+  if(!title || amount<=0){
+   alert("نام مصرف و مبلغ را وارد کن");
+   return;
+  }
 
- if(!title || amount<=0){
-  alert("نام مصرف و مبلغ را وارد کن");
-  return;
- }
+  const {error}=await getDB().from("expenses").insert({
+   title:title,
+   amount:amount,
+   note:val("enote")
+  });
 
- const {error}=await db.from("expenses").insert({
-  title:title,
-  amount:amount,
-  note:val("enote")
- });
+  if(error){alert(error.message);return;}
 
- if(error){
-  alert(error.message);
-  return;
- }
+  el("ename").value="";
+  el("eamount").value="";
+  el("enote").value="";
 
- el("ename").value="";
- el("eamount").value="";
- el("enote").value="";
+  alert("مصرف ثبت شد");
+  loadExpenses();
 
- alert("مصرف ثبت شد");
-
- loadExpenses();
+ }catch(e){alert(e.message);}
 }
 
 // نمایش مصارف
 async function loadExpenses(){
+ try{
+  el("expenseList").innerHTML="در حال بارگذاری...";
 
- el("expenseList").innerHTML="در حال بارگذاری...";
+  const {data,error}=await getDB()
+   .from("expenses")
+   .select("title,amount,note")
+   .order("created_at",{ascending:false});
 
- const {data,error}=await db
-  .from("expenses")
-  .select("title,amount,note")
-  .order("created_at",{ascending:false});
+  if(error){
+   el("expenseList").textContent=error.message;
+   return;
+  }
 
- if(error){
-  el("expenseList").textContent=error.message;
-  return;
+  el("expenseList").innerHTML="";
+  table("expenseList",["مصرف","مبلغ","توضیحات"],
+   data.map(x=>[x.title,x.amount,x.note]));
+
+ }catch(e){
+  el("expenseList").textContent=e.message;
  }
-
- el("expenseList").innerHTML="";
-
- table(
-  "expenseList",
-  ["مصرف","مبلغ","توضیحات"],
-  data.map(x=>[x.title,x.amount,x.note])
- );
 }
 
- 
-
-
+// شروع برنامه پس از آماده شدن صفحه
+window.addEventListener("load",function(){
+ start();
+});
 </script>
 
 </body>
