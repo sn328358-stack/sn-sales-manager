@@ -21,6 +21,7 @@ small{color:#777}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
 .hidden{display:none}
+.receipt-btn{background:#a47b19;color:white;padding:8px;font-size:13px;min-width:90px}
 </style>
 </head>
 <body>
@@ -151,25 +152,20 @@ function el(id){return document.getElementById(id);}
 function val(id){return el(id).value.trim();}
 function msg(t){el("message").textContent=t;}
 
-// تبدیل تاریخ میلادی به تاریخ هجری شمسی افغانستان
 function afghanDate(dateValue){
  if(!dateValue) return "";
  const d=new Date(dateValue);
  if(isNaN(d.getTime())) return "";
  return new Intl.DateTimeFormat("fa-AF-u-ca-persian-nu-arab",{
-  year:"numeric",
-  month:"2-digit",
-  day:"2-digit",
+  year:"numeric",month:"2-digit",day:"2-digit",
   timeZone:"Asia/Kabul"
  }).format(d).replace(/-/g,"/");
 }
 
-// تبدیل اعداد به افغانی
 function afghanNumber(value){
  return new Intl.NumberFormat("fa-AF").format(Number(value||0));
 }
 
-// تاریخ اول ماه جاری میلادی برای دیتابیس
 function currentMonth(){
  const d=new Date();
  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01";
@@ -250,6 +246,131 @@ function table(target,headers,rows){
  box.appendChild(t);
 }
 
+/* ساخت جدول دارای دکمه چاپ رسید */
+function receiptTable(target,headers,rows,type){
+ const box=el(target);
+ const t=document.createElement("table");
+ const head=document.createElement("tr");
+
+ headers.forEach(h=>{
+  const th=document.createElement("th");
+  th.textContent=h;
+  head.appendChild(th);
+ });
+
+ const actionHead=document.createElement("th");
+ actionHead.textContent="رسید";
+ head.appendChild(actionHead);
+ t.appendChild(head);
+
+ rows.forEach(item=>{
+  const tr=document.createElement("tr");
+
+  item.cells.forEach(value=>{
+   const td=document.createElement("td");
+   td.textContent=value??"";
+   tr.appendChild(td);
+  });
+
+  const action=document.createElement("td");
+  const btn=document.createElement("button");
+  btn.className="receipt-btn";
+  btn.textContent="چاپ رسید";
+  btn.onclick=()=>printReceipt(type,item);
+  action.appendChild(btn);
+  tr.appendChild(action);
+  t.appendChild(tr);
+ });
+
+ box.appendChild(t);
+}
+
+/* چاپ رسید فروش یا دریافت پول */
+function printReceipt(type,item){
+ const win=window.open("","_blank","width=800,height=700");
+ if(!win){
+  alert("اجازه باز شدن پنجره چاپ را در مرورگر فعال کن.");
+  return;
+ }
+
+ const isSale=type==="sale";
+ const title=isSale?"رسید فروش":"رسید دریافت پول";
+ const number=(isSale?"SALE-":"PAY-")+
+  String(item.id||"").slice(-8).toUpperCase();
+
+ const total=Number(item.total||0);
+ const paid=Number(item.paid||0);
+ const balance=total-paid;
+
+ const details=isSale
+ ? `
+ <tr><td>مجموع فروش</td><td>${afghanNumber(total)} افغانی</td></tr>
+ <tr><td>پرداخت‌شده</td><td>${afghanNumber(paid)} افغانی</td></tr>
+ <tr><td>باقی‌داری</td><td>${afghanNumber(balance)} افغانی</td></tr>
+ `
+ : `
+ <tr><td>مبلغ دریافتی</td><td>${afghanNumber(item.amount)} افغانی</td></tr>
+ <tr><td>توضیحات</td><td>${escapeReceipt(item.note||"ندارد")}</td></tr>
+ `;
+
+ const html=`
+ <!DOCTYPE html>
+ <html lang="fa" dir="rtl">
+ <head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>${title}</title>
+ <style>
+ body{font-family:Arial,sans-serif;color:#17352b;padding:25px}
+ .receipt{max-width:650px;margin:auto;border:2px solid #064e3b;padding:25px;border-radius:12px}
+ header{text-align:center;background:#064e3b;color:#e8c66a;padding:18px;border-radius:8px}
+ h2{margin:0}
+ .info{margin:20px 0;line-height:2}
+ table{width:100%;border-collapse:collapse;margin-top:15px}
+ td{padding:12px;border:1px solid #ddd}
+ td:first-child{font-weight:bold;background:#f2f5f2;width:40%}
+ .footer{text-align:center;margin-top:25px;color:#777}
+ .print{text-align:center;margin-top:20px}
+ button{padding:12px 30px;background:#086b4b;color:white;border:0;border-radius:7px;font-size:16px}
+ @media print{.print{display:none}body{padding:0}.receipt{border:1px solid #064e3b}}
+ </style>
+ </head>
+ <body>
+ <div class="receipt">
+ <header>
+ <h2>SN SALES MANAGER</h2>
+ <p>${title}</p>
+ </header>
+ <div class="info">
+ <div>شماره رسید: ${number}</div>
+ <div>تاریخ: ${afghanDate(item.created_at)}</div>
+ <div>نام مشتری: ${escapeReceipt(item.customer_name||"مشتری عمومی")}</div>
+ <div>شماره تماس: ${escapeReceipt(item.customer_phone||"ثبت نشده")}</div>
+ </div>
+ <table>${details}</table>
+ <div class="footer">
+ <p>شماره تماس: 0707570013</p>
+ <p>با تشکر از خرید و اعتماد شما</p>
+ <strong>SN SALES MANAGER</strong>
+ </div>
+ <div class="print">
+ <button onclick="window.print()">چاپ رسید / ذخیره PDF</button>
+ </div>
+ </div>
+ </body>
+ </html>`;
+
+ win.document.open();
+ win.document.write(html);
+ win.document.close();
+}
+
+function escapeReceipt(value){
+ return String(value??"").replace(/[&<>"']/g,function(ch){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];
+ });
+}
+
 async function addCustomer(){
  try{
   const name=val("cname");
@@ -309,6 +430,7 @@ async function addSale(){
   const total=Number(val("stotal")),paid=Number(val("spaid"));
   const cid=val("scustomer")||null;
   if(total<=0 || paid<0 || paid>total){alert("مبلغ فروش و پرداخت را بررسی کن");return;}
+
   if(cid){
    const {data:customer,error:customerError}=await getDB().from("customers")
     .select("id,balance").eq("id",cid).single();
@@ -322,21 +444,45 @@ async function addSale(){
    const {error}=await getDB().from("sales").insert({customer_id:null,total,paid});
    if(error){alert(error.message);return;}
   }
+
   el("stotal").value="";el("spaid").value="";el("scustomer").value="";
   alert("فروش ثبت شد");loadSales();
  }catch(e){alert(e.message);}
 }
 
+/* بارگذاری فروش‌ها همراه نام مشتری برای چاپ رسید */
 async function loadSales(){
  try{
   el("salesList").innerHTML="در حال بارگذاری...";
   const {data,error}=await getDB().from("sales")
-   .select("total,paid,created_at")
+   .select("id,customer_id,total,paid,created_at")
    .order("created_at",{ascending:false}).limit(50);
   if(error){el("salesList").textContent=error.message;return;}
+
+  const {data:customers,error:customerError}=await getDB()
+   .from("customers").select("id,name,phone");
+  if(customerError){el("salesList").textContent=customerError.message;return;}
+
+  const customerMap={};
+  customers.forEach(c=>{customerMap[c.id]=c;});
+
   el("salesList").innerHTML="";
-  table("salesList",["مجموع فروش","پرداخت‌شده","تاریخ افغانی"],
-   data.map(x=>[afghanNumber(x.total),afghanNumber(x.paid),afghanDate(x.created_at)]));
+  const rows=data.map(x=>{
+   const customer=customerMap[x.customer_id]||{};
+   return {
+    ...x,
+    customer_name:customer.name||"مشتری عمومی",
+    customer_phone:customer.phone||"",
+    cells:[
+     afghanNumber(x.total),
+     afghanNumber(x.paid),
+     afghanDate(x.created_at),
+     customer.name||"مشتری عمومی"
+    ]
+   };
+  });
+
+  receiptTable("salesList",["مجموع فروش","پرداخت‌شده","تاریخ افغانی","مشتری"],rows,"sale");
  }catch(e){el("salesList").textContent=e.message;}
 }
 
@@ -356,16 +502,39 @@ async function addPayment(){
  }catch(e){alert(e.message);}
 }
 
+/* بارگذاری دریافت‌ها همراه نام مشتری برای چاپ رسید */
 async function loadPayments(){
  try{
   el("paymentList").innerHTML="در حال بارگذاری...";
   const {data,error}=await getDB().from("payments")
-   .select("amount,note,created_at")
+   .select("id,customer_id,amount,note,created_at")
    .order("created_at",{ascending:false}).limit(50);
   if(error){el("paymentList").textContent=error.message;return;}
+
+  const {data:customers,error:customerError}=await getDB()
+   .from("customers").select("id,name,phone");
+  if(customerError){el("paymentList").textContent=customerError.message;return;}
+
+  const customerMap={};
+  customers.forEach(c=>{customerMap[c.id]=c;});
+
   el("paymentList").innerHTML="";
-  table("paymentList",["مبلغ دریافتی","توضیحات","تاریخ افغانی"],
-   data.map(x=>[afghanNumber(x.amount),x.note,afghanDate(x.created_at)]));
+  const rows=data.map(x=>{
+   const customer=customerMap[x.customer_id]||{};
+   return {
+    ...x,
+    customer_name:customer.name||"مشتری عمومی",
+    customer_phone:customer.phone||"",
+    cells:[
+     afghanNumber(x.amount),
+     x.note||"",
+     afghanDate(x.created_at),
+     customer.name||"مشتری عمومی"
+    ]
+   };
+  });
+
+  receiptTable("paymentList",["مبلغ دریافتی","توضیحات","تاریخ افغانی","مشتری"],rows,"payment");
  }catch(e){el("paymentList").textContent=e.message;}
 }
 
@@ -413,16 +582,19 @@ async function loadEmployees(){
    .select("id,name,phone,monthly_salary")
    .order("created_at",{ascending:false});
   if(error){el("employeeList").textContent=error.message;return;}
+
   const {data:transactions,error:transactionError}=await getDB()
    .from("employee_transactions").select("employee_id,amount,transaction_type")
    .eq("transaction_month",currentMonth());
   if(transactionError){el("employeeList").textContent=transactionError.message;return;}
+
   const select=el("transactionEmployee");
   select.innerHTML='<option value="">انتخاب کارمند</option>';
   employees.forEach(emp=>{
    const option=document.createElement("option");
    option.value=emp.id;option.textContent=emp.name;select.appendChild(option);
   });
+
   const rows=employees.map(emp=>{
    const own=transactions.filter(t=>t.employee_id===emp.id);
    const withdrawals=own.filter(t=>t.transaction_type==="withdrawal")
@@ -433,6 +605,7 @@ async function loadEmployees(){
    return [emp.name,emp.phone,afghanNumber(salary),afghanNumber(withdrawals),
     afghanNumber(payments),afghanNumber(salary-withdrawals-payments)];
   });
+
   el("employeeList").innerHTML="";
   if(!rows.length){el("employeeList").textContent="هنوز کارمندی ثبت نشده است.";}
   else table("employeeList",["نام","تماس","معاش ماهانه","برداشت","پرداخت معاش","باقی‌مانده"],rows);
@@ -446,11 +619,13 @@ async function addEmployeeTransaction(){
   const amount=Number(val("transactionAmount"));
   const description=val("transactionDescription");
   if(!employeeId || amount<=0){alert("کارمند و مبلغ را درست انتخاب و وارد کن");return;}
+
   const {error}=await getDB().from("employee_transactions").insert({
    employee_id:employeeId,amount,transaction_type:type,
    transaction_month:currentMonth(),description
   });
   if(error){alert(error.message);return;}
+
   el("transactionAmount").value="";el("transactionDescription").value="";
   alert("تراکنش کارمند ثبت شد");
   loadEmployees();loadEmployeeTransactions();
@@ -464,10 +639,13 @@ async function loadEmployeeTransactions(){
    .select("employee_id,amount,transaction_type,transaction_month,description,created_at")
    .order("created_at",{ascending:false}).limit(50);
   if(error){el("employeeTransactionList").textContent=error.message;return;}
+
   const {data:employees,error:employeeError}=await getDB().from("employees").select("id,name");
   if(employeeError){el("employeeTransactionList").textContent=employeeError.message;return;}
+
   const names={};
   employees.forEach(emp=>{names[emp.id]=emp.name;});
+
   const rows=transactions.map(t=>[
    names[t.employee_id]||"کارمند",
    t.transaction_type==="withdrawal"?"برداشت":"پرداخت معاش",
@@ -475,6 +653,7 @@ async function loadEmployeeTransactions(){
    afghanDate(t.created_at),
    t.description
   ]);
+
   el("employeeTransactionList").innerHTML="";
   if(!rows.length){el("employeeTransactionList").textContent="هنوز برداشتی یا پرداختی ثبت نشده است.";}
   else table("employeeTransactionList",["کارمند","نوع","مبلغ","تاریخ افغانی","توضیحات"],rows);
