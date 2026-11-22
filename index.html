@@ -76,7 +76,9 @@ td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
 
 <div id="sales" class="card hidden">
 <h3>ثبت فروش</h3>
-<input id="scustomer" placeholder="شناسه مشتری (اختیاری)">
+<select id="scustomer">
+<option value="">انتخاب نام مشتری (اختیاری)</option>
+</select>
 <input id="stotal" type="number" placeholder="مجموع فروش به افغانی">
 <input id="spaid" type="number" placeholder="مبلغ پرداخت‌شده">
 <button onclick="addSale()">ثبت فروش</button>
@@ -86,7 +88,9 @@ td,th{padding:9px;border-bottom:1px solid #ddd;text-align:right}
 
 <div id="payments" class="card hidden">
 <h3>دریافت پول از مشتری</h3>
-<input id="paycustomer" placeholder="شناسه مشتری">
+<select id="paycustomer">
+<option value="">انتخاب نام مشتری</option>
+</select>
 <input id="payamount" type="number" placeholder="مبلغ دریافتی به افغانی">
 <input id="paynote" placeholder="توضیحات">
 <button onclick="addPayment()">ثبت دریافت پول</button>
@@ -157,7 +161,9 @@ function afghanDate(dateValue){
  const d=new Date(dateValue);
  if(isNaN(d.getTime())) return "";
  return new Intl.DateTimeFormat("fa-AF-u-ca-persian-nu-arab",{
-  year:"numeric",month:"2-digit",day:"2-digit",
+  year:"numeric",
+  month:"2-digit",
+  day:"2-digit",
   timeZone:"Asia/Kabul"
  }).format(d).replace(/-/g,"/");
 }
@@ -210,14 +216,66 @@ async function start(){
  }catch(e){msg("خطا: "+e.message);}
 }
 
+/* بارگذاری نام مشتری‌ها در فهرست فروش و دریافت پول */
+async function loadCustomerOptions(){
+ try{
+  const {data,error}=await getDB().from("customers")
+   .select("id,name,phone")
+   .order("name",{ascending:true});
+
+  if(error){
+   alert("بارگذاری مشتریان ناموفق بود: "+error.message);
+   return;
+  }
+
+  const salesSelect=el("scustomer");
+  const paymentSelect=el("paycustomer");
+
+  const salesValue=salesSelect.value;
+  const paymentValue=paymentSelect.value;
+
+  salesSelect.innerHTML='<option value="">انتخاب نام مشتری (اختیاری)</option>';
+  paymentSelect.innerHTML='<option value="">انتخاب نام مشتری</option>';
+
+  data.forEach(customer=>{
+   const option1=document.createElement("option");
+   option1.value=customer.id;
+   option1.textContent=customer.name;
+   salesSelect.appendChild(option1);
+
+   const option2=document.createElement("option");
+   option2.value=customer.id;
+   option2.textContent=customer.name;
+   paymentSelect.appendChild(option2);
+  });
+
+  if(data.some(c=>c.id===salesValue))salesSelect.value=salesValue;
+  if(data.some(c=>c.id===paymentValue))paymentSelect.value=paymentValue;
+
+ }catch(e){
+  alert("خطا در بارگذاری نام مشتریان: "+e.message);
+ }
+}
+
 function show(id){
  ["customers","products","sales","payments","expenses","employees"].forEach(x=>el(x).classList.add("hidden"));
  el(id).classList.remove("hidden");
+
  if(id==="customers")loadCustomers();
  if(id==="products")loadProducts();
- if(id==="sales")loadSales();
- if(id==="payments")loadPayments();
+
+ if(id==="sales"){
+  loadCustomerOptions();
+  loadSales();
+ }
+
+ if(id==="payments"){
+  loadCustomerOptions();
+  loadPayments();
+ }
+
  if(id==="expenses")loadExpenses();
+
  if(id==="employees"){
   loadEmployees();
   loadEmployeeTransactions();
@@ -228,12 +286,15 @@ function table(target,headers,rows){
  const box=el(target);
  const t=document.createElement("table");
  const tr=document.createElement("tr");
+
  headers.forEach(h=>{
   const th=document.createElement("th");
   th.textContent=h;
   tr.appendChild(th);
  });
+
  t.appendChild(tr);
+
  rows.forEach(row=>{
   const r=document.createElement("tr");
   row.forEach(v=>{
@@ -243,10 +304,11 @@ function table(target,headers,rows){
   });
   t.appendChild(r);
  });
+
  box.appendChild(t);
 }
 
-/* ساخت جدول دارای دکمه چاپ رسید */
+/* جدول دارای دکمه چاپ رسید */
 function receiptTable(target,headers,rows,type){
  const box=el(target);
  const t=document.createElement("table");
@@ -288,6 +350,7 @@ function receiptTable(target,headers,rows,type){
 /* چاپ رسید فروش یا دریافت پول */
 function printReceipt(type,item){
  const win=window.open("","_blank","width=800,height=700");
+
  if(!win){
   alert("اجازه باز شدن پنجره چاپ را در مرورگر فعال کن.");
   return;
@@ -375,12 +438,19 @@ async function addCustomer(){
  try{
   const name=val("cname");
   if(!name){alert("نام مشتری را وارد کن");return;}
+
   const {error}=await getDB().from("customers").insert({
    name,phone:val("cphone"),address:val("caddress")
   });
+
   if(error){alert(error.message);return;}
-  el("cname").value="";el("cphone").value="";el("caddress").value="";
-  alert("مشتری ثبت شد");loadCustomers();
+
+  el("cname").value="";
+  el("cphone").value="";
+  el("caddress").value="";
+
+  alert("مشتری ثبت شد");
+  loadCustomers();
  }catch(e){alert(e.message);}
 }
 
@@ -390,7 +460,9 @@ async function loadCustomers(){
   const {data,error}=await getDB().from("customers")
    .select("name,phone,balance")
    .order("created_at",{ascending:false});
+
   if(error){el("customerList").textContent=error.message;return;}
+
   el("customerList").innerHTML="";
   table("customerList",["نام","تماس","باقی‌داری (AFN)"],
    data.map(x=>[x.name,x.phone,afghanNumber(x.balance)]));
@@ -401,14 +473,24 @@ async function addProduct(){
  try{
   const name=val("pname"),qty=Number(val("pqty"));
   const cost=Number(val("pcost")),price=Number(val("pprice"));
-  if(!name || qty<0 || cost<0 || price<0){alert("اطلاعات محصول را بررسی کن");return;}
+
+  if(!name || qty<0 || cost<0 || price<0){
+   alert("اطلاعات محصول را بررسی کن");return;
+  }
+
   const {error}=await getDB().from("products").insert({
    name,quantity:qty,purchase_price:cost,sale_price:price
   });
+
   if(error){alert(error.message);return;}
-  el("pname").value="";el("pqty").value="";
-  el("pcost").value="";el("pprice").value="";
-  alert("محصول ثبت شد");loadProducts();
+
+  el("pname").value="";
+  el("pqty").value="";
+  el("pcost").value="";
+  el("pprice").value="";
+
+  alert("محصول ثبت شد");
+  loadProducts();
  }catch(e){alert(e.message);}
 }
 
@@ -418,57 +500,94 @@ async function loadProducts(){
   const {data,error}=await getDB().from("products")
    .select("name,quantity,purchase_price,sale_price")
    .order("created_at",{ascending:false});
+
   if(error){el("productList").textContent=error.message;return;}
+
   el("productList").innerHTML="";
   table("productList",["محصول","تعداد","خرید","فروش"],
-   data.map(x=>[x.name,afghanNumber(x.quantity),afghanNumber(x.purchase_price),afghanNumber(x.sale_price)]));
+   data.map(x=>[
+    x.name,
+    afghanNumber(x.quantity),
+    afghanNumber(x.purchase_price),
+    afghanNumber(x.sale_price)
+   ]));
  }catch(e){el("productList").textContent=e.message;}
 }
 
 async function addSale(){
  try{
-  const total=Number(val("stotal")),paid=Number(val("spaid"));
+  const total=Number(val("stotal"));
+  const paid=Number(val("spaid"));
   const cid=val("scustomer")||null;
-  if(total<=0 || paid<0 || paid>total){alert("مبلغ فروش و پرداخت را بررسی کن");return;}
+
+  if(total<=0 || paid<0 || paid>total){
+   alert("مبلغ فروش و پرداخت را بررسی کن");return;
+  }
 
   if(cid){
-   const {data:customer,error:customerError}=await getDB().from("customers")
-    .select("id,balance").eq("id",cid).single();
-   if(customerError){alert("شناسه مشتری درست نیست: "+customerError.message);return;}
-   const {error}=await getDB().from("sales").insert({customer_id:cid,total,paid});
+   const {data:customer,error:customerError}=await getDB()
+    .from("customers").select("id,balance").eq("id",cid).single();
+
+   if(customerError){
+    alert("مشتری پیدا نشد: "+customerError.message);return;
+   }
+
+   const {error}=await getDB().from("sales").insert({
+    customer_id:cid,total,paid
+   });
+
    if(error){alert(error.message);return;}
+
    const {error:updateError}=await getDB().from("customers")
-    .update({balance:Number(customer.balance||0)+total-paid}).eq("id",cid);
-   if(updateError){alert("فروش ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);return;}
+    .update({balance:Number(customer.balance||0)+total-paid})
+    .eq("id",cid);
+
+   if(updateError){
+    alert("فروش ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);
+    return;
+   }
   }else{
-   const {error}=await getDB().from("sales").insert({customer_id:null,total,paid});
+   const {error}=await getDB().from("sales").insert({
+    customer_id:null,total,paid
+   });
+
    if(error){alert(error.message);return;}
   }
 
-  el("stotal").value="";el("spaid").value="";el("scustomer").value="";
-  alert("فروش ثبت شد");loadSales();
+  el("stotal").value="";
+  el("spaid").value="";
+  el("scustomer").value="";
+
+  alert("فروش ثبت شد");
+  loadSales();
  }catch(e){alert(e.message);}
 }
 
-/* بارگذاری فروش‌ها همراه نام مشتری برای چاپ رسید */
 async function loadSales(){
  try{
   el("salesList").innerHTML="در حال بارگذاری...";
+
   const {data,error}=await getDB().from("sales")
    .select("id,customer_id,total,paid,created_at")
    .order("created_at",{ascending:false}).limit(50);
+
   if(error){el("salesList").textContent=error.message;return;}
 
   const {data:customers,error:customerError}=await getDB()
    .from("customers").select("id,name,phone");
-  if(customerError){el("salesList").textContent=customerError.message;return;}
+
+  if(customerError){
+   el("salesList").textContent=customerError.message;return;
+  }
 
   const customerMap={};
   customers.forEach(c=>{customerMap[c.id]=c;});
 
   el("salesList").innerHTML="";
+
   const rows=data.map(x=>{
    const customer=customerMap[x.customer_id]||{};
+
    return {
     ...x,
     customer_name:customer.name||"مشتری عمومی",
@@ -482,45 +601,77 @@ async function loadSales(){
    };
   });
 
-  receiptTable("salesList",["مجموع فروش","پرداخت‌شده","تاریخ افغانی","مشتری"],rows,"sale");
+  receiptTable("salesList",
+   ["مجموع فروش","پرداخت‌شده","تاریخ افغانی","مشتری"],
+   rows,"sale");
+
  }catch(e){el("salesList").textContent=e.message;}
 }
 
 async function addPayment(){
  try{
-  const cid=val("paycustomer"),amount=Number(val("payamount")),note=val("paynote");
-  if(!cid || amount<=0){alert("شناسه مشتری و مبلغ را وارد کن");return;}
-  const {data,error}=await getDB().from("customers").select("balance").eq("id",cid).single();
+  const cid=val("paycustomer");
+  const amount=Number(val("payamount"));
+  const note=val("paynote");
+
+  if(!cid || amount<=0){
+   alert("نام مشتری و مبلغ را وارد کن");return;
+  }
+
+  const {data,error}=await getDB().from("customers")
+   .select("balance").eq("id",cid).single();
+
   if(error){alert("مشتری پیدا نشد: "+error.message);return;}
-  const {error:paymentError}=await getDB().from("payments").insert({customer_id:cid,amount,note});
+
+  const {error:paymentError}=await getDB().from("payments").insert({
+   customer_id:cid,amount,note
+  });
+
   if(paymentError){alert(paymentError.message);return;}
+
   const {error:updateError}=await getDB().from("customers")
-   .update({balance:Number(data.balance||0)-amount}).eq("id",cid);
-  if(updateError){alert("دریافت ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);return;}
-  el("paycustomer").value="";el("payamount").value="";el("paynote").value="";
-  alert("دریافت پول ثبت شد");loadPayments();
+   .update({balance:Number(data.balance||0)-amount})
+   .eq("id",cid);
+
+  if(updateError){
+   alert("دریافت ثبت شد، اما حساب مشتری به‌روزرسانی نشد: "+updateError.message);
+   return;
+  }
+
+  el("paycustomer").value="";
+  el("payamount").value="";
+  el("paynote").value="";
+
+  alert("دریافت پول ثبت شد");
+  loadPayments();
  }catch(e){alert(e.message);}
 }
 
-/* بارگذاری دریافت‌ها همراه نام مشتری برای چاپ رسید */
 async function loadPayments(){
  try{
   el("paymentList").innerHTML="در حال بارگذاری...";
+
   const {data,error}=await getDB().from("payments")
    .select("id,customer_id,amount,note,created_at")
    .order("created_at",{ascending:false}).limit(50);
+
   if(error){el("paymentList").textContent=error.message;return;}
 
   const {data:customers,error:customerError}=await getDB()
    .from("customers").select("id,name,phone");
-  if(customerError){el("paymentList").textContent=customerError.message;return;}
+
+  if(customerError){
+   el("paymentList").textContent=customerError.message;return;
+  }
 
   const customerMap={};
   customers.forEach(c=>{customerMap[c.id]=c;});
 
   el("paymentList").innerHTML="";
+
   const rows=data.map(x=>{
    const customer=customerMap[x.customer_id]||{};
+
    return {
     ...x,
     customer_name:customer.name||"مشتری عمومی",
@@ -534,20 +685,33 @@ async function loadPayments(){
    };
   });
 
-  receiptTable("paymentList",["مبلغ دریافتی","توضیحات","تاریخ افغانی","مشتری"],rows,"payment");
+  receiptTable("paymentList",
+   ["مبلغ دریافتی","توضیحات","تاریخ افغانی","مشتری"],
+   rows,"payment");
+
  }catch(e){el("paymentList").textContent=e.message;}
 }
 
 async function addExpense(){
  try{
   const title=val("ename"),amount=Number(val("eamount"));
-  if(!title || amount<=0){alert("نام مصرف و مبلغ را وارد کن");return;}
+
+  if(!title || amount<=0){
+   alert("نام مصرف و مبلغ را وارد کن");return;
+  }
+
   const {error}=await getDB().from("expenses").insert({
    title,amount,note:val("enote")
   });
+
   if(error){alert(error.message);return;}
-  el("ename").value="";el("eamount").value="";el("enote").value="";
-  alert("مصرف ثبت شد");loadExpenses();
+
+  el("ename").value="";
+  el("eamount").value="";
+  el("enote").value="";
+
+  alert("مصرف ثبت شد");
+  loadExpenses();
  }catch(e){alert(e.message);}
 }
 
@@ -557,58 +721,105 @@ async function loadExpenses(){
   const {data,error}=await getDB().from("expenses")
    .select("title,amount,note,created_at")
    .order("created_at",{ascending:false});
+
   if(error){el("expenseList").textContent=error.message;return;}
+
   el("expenseList").innerHTML="";
   table("expenseList",["مصرف","مبلغ","توضیحات","تاریخ افغانی"],
-   data.map(x=>[x.title,afghanNumber(x.amount),x.note,afghanDate(x.created_at)]));
+   data.map(x=>[
+    x.title,
+    afghanNumber(x.amount),
+    x.note,
+    afghanDate(x.created_at)
+   ]));
  }catch(e){el("expenseList").textContent=e.message;}
 }
 
 async function addEmployee(){
  try{
-  const name=val("empname"),phone=val("empphone"),salary=Number(val("empsalary"));
-  if(!name || salary<0 || val("empsalary")===""){alert("نام و معاش ماهانه را درست وارد کن");return;}
-  const {error}=await getDB().from("employees").insert({name,phone,monthly_salary:salary});
+  const name=val("empname");
+  const phone=val("empphone");
+  const salary=Number(val("empsalary"));
+
+  if(!name || salary<0 || val("empsalary")===""){
+   alert("نام و معاش ماهانه را درست وارد کن");return;
+  }
+
+  const {error}=await getDB().from("employees").insert({
+   name,phone,monthly_salary:salary
+  });
+
   if(error){alert(error.message);return;}
-  el("empname").value="";el("empphone").value="";el("empsalary").value="";
-  alert("کارمند ثبت شد");loadEmployees();
+
+  el("empname").value="";
+  el("empphone").value="";
+  el("empsalary").value="";
+
+  alert("کارمند ثبت شد");
+  loadEmployees();
  }catch(e){alert(e.message);}
 }
 
 async function loadEmployees(){
  try{
   el("employeeList").innerHTML="در حال بارگذاری...";
+
   const {data:employees,error}=await getDB().from("employees")
    .select("id,name,phone,monthly_salary")
    .order("created_at",{ascending:false});
+
   if(error){el("employeeList").textContent=error.message;return;}
 
   const {data:transactions,error:transactionError}=await getDB()
-   .from("employee_transactions").select("employee_id,amount,transaction_type")
+   .from("employee_transactions")
+   .select("employee_id,amount,transaction_type")
    .eq("transaction_month",currentMonth());
-  if(transactionError){el("employeeList").textContent=transactionError.message;return;}
+
+  if(transactionError){
+   el("employeeList").textContent=transactionError.message;return;
+  }
 
   const select=el("transactionEmployee");
   select.innerHTML='<option value="">انتخاب کارمند</option>';
+
   employees.forEach(emp=>{
    const option=document.createElement("option");
-   option.value=emp.id;option.textContent=emp.name;select.appendChild(option);
+   option.value=emp.id;
+   option.textContent=emp.name;
+   select.appendChild(option);
   });
 
   const rows=employees.map(emp=>{
    const own=transactions.filter(t=>t.employee_id===emp.id);
+
    const withdrawals=own.filter(t=>t.transaction_type==="withdrawal")
     .reduce((sum,t)=>sum+Number(t.amount),0);
+
    const payments=own.filter(t=>t.transaction_type==="salary_payment")
     .reduce((sum,t)=>sum+Number(t.amount),0);
+
    const salary=Number(emp.monthly_salary||0);
-   return [emp.name,emp.phone,afghanNumber(salary),afghanNumber(withdrawals),
-    afghanNumber(payments),afghanNumber(salary-withdrawals-payments)];
+
+   return [
+    emp.name,
+    emp.phone,
+    afghanNumber(salary),
+    afghanNumber(withdrawals),
+    afghanNumber(payments),
+    afghanNumber(salary-withdrawals-payments)
+   ];
   });
 
   el("employeeList").innerHTML="";
-  if(!rows.length){el("employeeList").textContent="هنوز کارمندی ثبت نشده است.";}
-  else table("employeeList",["نام","تماس","معاش ماهانه","برداشت","پرداخت معاش","باقی‌مانده"],rows);
+
+  if(!rows.length){
+   el("employeeList").textContent="هنوز کارمندی ثبت نشده است.";
+  }else{
+   table("employeeList",
+    ["نام","تماس","معاش ماهانه","برداشت","پرداخت معاش","باقی‌مانده"],
+    rows);
+  }
+
  }catch(e){el("employeeList").textContent=e.message;}
 }
 
@@ -618,30 +829,50 @@ async function addEmployeeTransaction(){
   const type=val("transactionType");
   const amount=Number(val("transactionAmount"));
   const description=val("transactionDescription");
-  if(!employeeId || amount<=0){alert("کارمند و مبلغ را درست انتخاب و وارد کن");return;}
+
+  if(!employeeId || amount<=0){
+   alert("کارمند و مبلغ را درست انتخاب و وارد کن");return;
+  }
 
   const {error}=await getDB().from("employee_transactions").insert({
-   employee_id:employeeId,amount,transaction_type:type,
-   transaction_month:currentMonth(),description
+   employee_id:employeeId,
+   amount,
+   transaction_type:type,
+   transaction_month:currentMonth(),
+   description
   });
+
   if(error){alert(error.message);return;}
 
-  el("transactionAmount").value="";el("transactionDescription").value="";
+  el("transactionAmount").value="";
+  el("transactionDescription").value="";
+
   alert("تراکنش کارمند ثبت شد");
-  loadEmployees();loadEmployeeTransactions();
+  loadEmployees();
+  loadEmployeeTransactions();
+
  }catch(e){alert(e.message);}
 }
 
 async function loadEmployeeTransactions(){
  try{
   el("employeeTransactionList").innerHTML="در حال بارگذاری...";
-  const {data:transactions,error}=await getDB().from("employee_transactions")
+
+  const {data:transactions,error}=await getDB()
+   .from("employee_transactions")
    .select("employee_id,amount,transaction_type,transaction_month,description,created_at")
    .order("created_at",{ascending:false}).limit(50);
-  if(error){el("employeeTransactionList").textContent=error.message;return;}
 
-  const {data:employees,error:employeeError}=await getDB().from("employees").select("id,name");
-  if(employeeError){el("employeeTransactionList").textContent=employeeError.message;return;}
+  if(error){
+   el("employeeTransactionList").textContent=error.message;return;
+  }
+
+  const {data:employees,error:employeeError}=await getDB()
+   .from("employees").select("id,name");
+
+  if(employeeError){
+   el("employeeTransactionList").textContent=employeeError.message;return;
+  }
 
   const names={};
   employees.forEach(emp=>{names[emp.id]=emp.name;});
@@ -655,8 +886,15 @@ async function loadEmployeeTransactions(){
   ]);
 
   el("employeeTransactionList").innerHTML="";
-  if(!rows.length){el("employeeTransactionList").textContent="هنوز برداشتی یا پرداختی ثبت نشده است.";}
-  else table("employeeTransactionList",["کارمند","نوع","مبلغ","تاریخ افغانی","توضیحات"],rows);
+
+  if(!rows.length){
+   el("employeeTransactionList").textContent="هنوز برداشتی یا پرداختی ثبت نشده است.";
+  }else{
+   table("employeeTransactionList",
+    ["کارمند","نوع","مبلغ","تاریخ افغانی","توضیحات"],
+    rows);
+  }
+
  }catch(e){el("employeeTransactionList").textContent=e.message;}
 }
 
